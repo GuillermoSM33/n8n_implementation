@@ -39,5 +39,5 @@ mínimos.
 ## Pendiente contra Supabase y Meta reales
 - [ ] `pg_net` llega al webhook a través del túnel (ver `select * from net._http_response order by id desc limit 5;`)
 - [ ] Un WhatsApp real llega al teléfono verificado
-- [ ] Gemini real con `GEMINI_MODEL=gemini-2.5-flash` (confirmar que el modelo está disponible para la API key)
+- [ ] Gemini real con `GEMINI_MODEL=gemini-3.8-flash` (confirmar que el modelo está disponible para la API key)
 - [ ] Lovable: login, lista, alta con aviso de duplicado, detalle, errores de la base de datos en un toast

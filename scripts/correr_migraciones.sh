@@ -46,6 +46,14 @@ if [[ -z "${SUPABASE_DB_URL:-}" ]]; then
 fi
 export SUPABASE_DB_URL
 
+# La conexión directa (db.<ref>.supabase.co) solo tiene IPv6; sin IPv6 no resuelve.
+if [[ "$SUPABASE_DB_URL" =~ @db\.[a-z0-9]+\.supabase\.co ]]; then
+  echo "SUPABASE_DB_URL usa la conexión directa (db.<ref>.supabase.co), que es solo IPv6." >&2
+  echo "Usa el Session pooler: Supabase → Connect → Session pooler. Formato:" >&2
+  echo "  postgresql://postgres.<ref>:<password>@aws-<n>-<region>.pooler.supabase.com:5432/postgres" >&2
+  exit 1
+fi
+
 # psql desde contenedor: no hace falta instalar el cliente. La URL viaja como
 # variable de entorno (no aparece en la lista de procesos) y el SQL por stdin.
 psql_run() {

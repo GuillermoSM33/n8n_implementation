@@ -54,7 +54,7 @@ services:
       # Llave pública (anon / publishable), la misma que usa el frontend. No es secreta.
       H4U_SUPABASE_ANON_KEY: ${H4U_SUPABASE_ANON_KEY:-}
       GEMINI_API_BASE: ${GEMINI_API_BASE:-https://generativelanguage.googleapis.com/v1beta}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
       H4U_OPERATOR_PHONE: ${H4U_OPERATOR_PHONE:-}
       H4U_UNASSIGNED_MINUTES: ${H4U_UNASSIGNED_MINUTES:-30}
       H4U_UNACKNOWLEDGED_MINUTES: ${H4U_UNACKNOWLEDGED_MINUTES:-30}
