@@ -1,9 +1,28 @@
 # Prompts de Lovable (adaptados al backend de este repo)
 
-Antes del prompt 1: en Lovable → **Integrations → Supabase → conectar el proyecto `H4U`
-existente**. Las tablas, reglas y datos de ejemplo ya están creados por
-`supabase/migrations` y `supabase/seed.sql`: Lovable **no debe crear ni modificar tablas**.
-Si Lovable propone una migración, rechazarla.
+Lovable **no** se conecta con el conector de Supabase: en el plan gratuito el botón "Usar Supabase"
+solo manda un mensaje al chat, y el agente termina activando **Lovable Cloud**, que es un backend
+aparte y vacío. Lo que se hace es conectar la app directo con `supabase-js`, usando la URL y la
+llave *publishable*, que son públicas por diseño. La seguridad la dan el login y RLS.
+
+Las tablas, reglas y datos de ejemplo ya existen (`scripts/correr_migraciones.sh --seed`), así que
+Lovable **no debe crear ni modificar tablas**. Si propone una migración o activar Cloud, rechazarlo.
+
+## Prompt 0: cliente directo y login
+
+```
+Cambio de plan: NO uses el conector de Supabase ni Lovable Cloud, y no me pidas conectarlos. Conecta la app directamente con supabase-js:
+
+1. Instala @supabase/supabase-js.
+2. Crea src/lib/supabase.ts que exporte un cliente creado con
+   url: https://<project-ref>.supabase.co
+   key (publishable, es pública): <sb_publishable_...>
+   con auth.persistSession y auth.autoRefreshToken en true.
+3. Todas las pantallas usan ese cliente para datos y para login (supabase.auth.signInWithPassword).
+
+La base de datos ya existe y tiene reglas propias: no crees tablas, migraciones, políticas ni edge functions.
+Por ahora solo deja el cliente listo y una pantalla de login que, al iniciar sesión, muestre "Sesión iniciada como <correo>" y un botón de cerrar sesión.
+```
 
 Después de cada prompt, probar en la vista previa antes de seguir.
 
