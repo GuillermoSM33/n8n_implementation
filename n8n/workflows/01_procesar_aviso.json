@@ -1,0 +1,354 @@
+{
+  "id": "H4uProcesarAviso",
+  "name": "H4U · Procesar aviso (sub-workflow)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "p-trigger",
+      "name": "Recibe outbox_id",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "outbox_id",
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "p-claim",
+      "name": "Reclamar aviso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.H4U_SUPABASE_URL }}/rest/v1/rpc/claim_notification",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_outbox_id: $json.outbox_id }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "H4uSupabaseSrv01",
+          "name": "H4U · Supabase service_role"
+        }
+      }
+    },
+    {
+      "id": "p-ifclaimed",
+      "name": "¿Reclamado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.claimed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "p-noop",
+      "name": "Ya procesado: nada que hacer",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        460
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "p-build",
+      "name": "Armar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Decide destinatario y arma el payload de WhatsApp Cloud API.\n// Configuración no secreta desde variables de entorno del contenedor.\nconst n = $input.first().json;\nconst env = $env;\nconst clean = (s, max = 300) => String(s ?? '-').replace(/\\s+/g, ' ').trim().slice(0, max) || '-';\n\nconst titles = {\n  asignacion: 'Nueva incidencia asignada',\n  sin_responsable: 'ALERTA: incidencia sin responsable',\n  sin_confirmacion: 'ALERTA: el responsable no ha confirmado',\n};\n\nlet to = null;\nlet skip = null;\nif (n.kind === 'asignacion') {\n  if (!n.still_assigned) skip = 'La incidencia ya se reasignó; este aviso es obsoleto';\n  else if (n.status === 'atendido' || n.status === 'descartado') skip = `La incidencia ya está ${n.status}`;\n  else if (!n.assignee_active) skip = 'El responsable está inactivo';\n  else if (!n.assignee_phone) skip = 'El responsable no tiene teléfono registrado';\n  else to = n.assignee_phone;\n} else {\n  if (n.status === 'atendido' || n.status === 'descartado') skip = `La incidencia ya está ${n.status}`;\n  else if (!env.H4U_OPERATOR_PHONE) skip = 'H4U_OPERATOR_PHONE no está configurado';\n  else to = env.H4U_OPERATOR_PHONE;\n}\nif (!skip && !env.WHATSAPP_PHONE_NUMBER_ID) skip = 'WHATSAPP_PHONE_NUMBER_ID no está configurado';\n\nconst title = titles[n.kind] ?? 'Aviso de incidencia';\nconst who = n.kind === 'asignacion' ? '' : ` · Responsable: ${n.assignee_name ?? 'sin asignar'}`;\nconst params = [title, n.folio, n.property, n.unit, `${n.priority}${who}`, n.description].map(v => clean(v));\n\nlet message;\nif ((env.WHATSAPP_MESSAGE_MODE ?? 'template') === 'text') {\n  message = {\n    type: 'text',\n    text: { preview_url: false, body:\n      `*${params[0]}*\\nFolio: ${params[1]}\\nPropiedad: ${params[2]} · ${params[3]}\\n` +\n      `Prioridad: ${params[4]}\\n\\n${params[5]}` },\n  };\n} else {\n  const name = env.WHATSAPP_TEMPLATE_NAME || 'hello_world';\n  const template = { name, language: { code: env.WHATSAPP_TEMPLATE_LANG || 'en_US' } };\n  // hello_world no lleva parámetros; aviso_incidencia lleva 6 (ver docs/whatsapp.md).\n  if (name !== 'hello_world') {\n    template.components = [{ type: 'body', parameters: params.map(text => ({ type: 'text', text })) }];\n  }\n  message = { type: 'template', template };\n}\n\nreturn [{ json: {\n  outbox_id: n.outbox_id,\n  folio: n.folio,\n  kind: n.kind,\n  skip,\n  url: `${env.WHATSAPP_API_BASE}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,\n  payload: { messaging_product: 'whatsapp', recipient_type: 'individual', to, ...message },\n} }];\n"
+      }
+    },
+    {
+      "id": "p-ifskip",
+      "name": "¿Se envía?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "p-send",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        100
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "H4uWhatsAppTok01",
+          "name": "H4U · Token WhatsApp Cloud API"
+        }
+      }
+    },
+    {
+      "id": "p-sent",
+      "name": "Marcar enviado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.H4U_SUPABASE_URL }}/rest/v1/rpc/complete_notification",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_outbox_id: $('Armar mensaje').item.json.outbox_id, p_status: 'sent', p_error: 'wamid: ' + ($json.messages?.[0]?.id ?? '-') }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "H4uSupabaseSrv01",
+          "name": "H4U · Supabase service_role"
+        }
+      }
+    },
+    {
+      "id": "p-failed",
+      "name": "Marcar fallido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.H4U_SUPABASE_URL }}/rest/v1/rpc/complete_notification",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_outbox_id: $('Armar mensaje').item.json.outbox_id, p_status: 'failed', p_error: String($json.error?.message ?? JSON.stringify($json.error ?? $json)).slice(0, 500) }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "H4uSupabaseSrv01",
+          "name": "H4U · Supabase service_role"
+        }
+      }
+    },
+    {
+      "id": "p-skipped",
+      "name": "Marcar omitido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        320
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.H4U_SUPABASE_URL }}/rest/v1/rpc/complete_notification",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_outbox_id: $json.outbox_id, p_status: 'skipped', p_error: $json.skip }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "H4uSupabaseSrv01",
+          "name": "H4U · Supabase service_role"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recibe outbox_id": {
+      "main": [
+        [
+          {
+            "node": "Reclamar aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reclamar aviso": {
+      "main": [
+        [
+          {
+            "node": "¿Reclamado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Reclamado?": {
+      "main": [
+        [
+          {
+            "node": "Armar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ya procesado: nada que hacer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar mensaje": {
+      "main": [
+        [
+          {
+            "node": "¿Se envía?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se envía?": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar omitido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Marcar enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "timezone": "America/Mexico_City",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "tags": []
+}

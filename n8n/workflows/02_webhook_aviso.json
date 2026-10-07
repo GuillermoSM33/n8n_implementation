@@ -1,0 +1,129 @@
+{
+  "id": "H4uWebhookAviso0",
+  "name": "H4U · Webhook: aviso de asignación",
+  "active": false,
+  "nodes": [
+    {
+      "id": "w-hook",
+      "name": "Webhook de Supabase",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "6f0c2a8e-4b1d-4c55-9a7e-3e1f0a9b7c21",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "h4u-aviso",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "H4uWebhookSecr01",
+          "name": "H4U · Secreto del webhook"
+        }
+      }
+    },
+    {
+      "id": "w-extract",
+      "name": "Tomar outbox_id",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "outbox_id",
+              "value": "={{ $json.body.outbox_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "w-call",
+      "name": "Procesar aviso",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H4uProcesarAviso"
+        },
+        "mode": "each",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "outbox_id": "={{ $json.outbox_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "outbox_id",
+              "displayName": "outbox_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook de Supabase": {
+      "main": [
+        [
+          {
+            "node": "Tomar outbox_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar outbox_id": {
+      "main": [
+        [
+          {
+            "node": "Procesar aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true,
+    "timezone": "America/Mexico_City"
+  },
+  "pinData": {},
+  "tags": []
+}
