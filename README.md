@@ -4,7 +4,7 @@ MVP de gestión de incidencias de mantenimiento para propiedades en Airbnb
 (technical challenge de Remote Hire 4U). **Lovable** para la app del operador,
 **Supabase** para datos y reglas, y **n8n** (self-hosted con Docker, imagen oficial de
 [n8n-io/n8n](https://github.com/n8n-io/n8n)) para avisar por WhatsApp al responsable
-y escalar al operador cuando nadie responde.
+y escalar al operador cuando nadie responde, y para sugerir el triaje con **Gemini**.
 
 ## Arquitectura
 
@@ -19,6 +19,10 @@ flowchart LR
     SUB -->|rpc claim_notification| DB
     SUB -->|Cloud API| WA[WhatsApp<br/>responsable / operador]
     SUB -->|rpc complete_notification| DB
+    OP -->|POST /h4u-triaje + token del operador| TRI[n8n · Triaje]
+    TRI -->|rpc triage_context como el operador| DB
+    TRI -->|JSON estructurado| GEM[Gemini]
+    TRI -->|sugerencia validada| OP
 ```
 
 **Decisiones y por qué**
@@ -31,6 +35,8 @@ flowchart LR
 | n8n solo ve lo que devuelve `claim_notification()` | El aviso **nunca** incluye el contacto del huésped | Si se quiere otro dato en el mensaje hay que tocar la función |
 | Secretos en Vault (Supabase) y en credenciales cifradas (n8n) | Nada sensible en el repo ni en `.env` del frontend | Un paso manual de configuración por cada secreto |
 | Operadores con login (RLS para `authenticated`, nada para `anon`) | Los datos de huéspedes no quedan expuestos con la anon key pública | Hay que crear usuarios para el demo |
+| Triaje: n8n valida el token del operador contra Supabase antes de llamar a Gemini | El webhook público no se puede usar sin sesión; ningún secreto en Lovable | Una llamada extra a Supabase por sugerencia |
+| Guardas después del modelo (catálogo, palabras de riesgo, duplicados, confianza) | La IA sugiere, pero no puede asignar fuera del catálogo ni bajar una emergencia | Las palabras de riesgo son una lista fija que hay que mantener |
 
 ## Estructura
 
@@ -39,7 +45,8 @@ docker-compose.yml          n8n 2.43.1 + Postgres propio + túnel Cloudflare (pe
 .env.example                configuración no secreta del contenedor
 supabase/migrations/        esquema, reglas, historial, vista "requiere atención", outbox y RPC
 supabase/seed.sql           4 propiedades, 5 responsables, 8 incidencias (no dispara avisos)
-n8n/workflows/              los 3 workflows exportados (fuente de verdad)
+n8n/workflows/              los 4 workflows exportados (fuente de verdad)
+scripts/correr_migraciones.sh  aplica migraciones pendientes una sola vez (+ seed opcional)
 scripts/n8n-bootstrap.sh    importa y publica workflows; crea credenciales de relleno
 docs/                       WhatsApp, prompts de Lovable, pruebas
 ```
@@ -47,7 +54,15 @@ docs/                       WhatsApp, prompts de Lovable, pruebas
 ## Puesta en marcha
 
 ### 1. Supabase
-1. SQL Editor → ejecutar en orden `supabase/migrations/*.sql` y después `supabase/seed.sql`.
+1. Migraciones y datos de ejemplo (requiere Docker; corre `psql` en contenedor):
+   ```bash
+   ./scripts/correr_migraciones.sh --estado   # qué está aplicado y qué falta
+   ./scripts/correr_migraciones.sh --seed     # aplica lo pendiente y carga el seed si la base está vacía
+   ```
+   Usa `SUPABASE_DB_URL` de `.env` (Connect → **Session pooler**) o la pide sin eco.
+   Volver a correrlo es seguro: lo aplicado se salta, cada migración es atómica, el seed no se
+   duplica, y si alguien edita una migración ya aplicada se detiene sin tocar nada.
+   Para cambiar el esquema: **archivo nuevo** `supabase/migrations/<AAAAMMDDHHMMSS>_<nombre>.sql`.
 2. Authentication → Users → crear el usuario del operador (correo + contraseña).
 3. Poner el teléfono (formato `5219981234567`) a los responsables que van a recibir avisos:
    `update assignees set phone = '52...' where name = 'Carlos Ruiz';`
@@ -75,6 +90,7 @@ En http://localhost:5678 → crear la cuenta de owner → **Credentials** → re
 | H4U · Supabase service_role | Host = URL del proyecto; Service Role Secret = Project Settings → API Keys → pestaña **Legacy API keys** → `service_role` (la JWT `eyJ...`; con la nueva `sb_secret_...` no está probado) |
 | H4U · Secreto del webhook | `openssl rand -hex 32` (el mismo va a Vault como `n8n_webhook_secret`) |
 | H4U · Token WhatsApp Cloud API | `Bearer <token>` de la app de Meta (ver [docs/whatsapp.md](docs/whatsapp.md)) |
+| H4U · API key de Gemini | Google AI Studio / proyecto `hire-4u` → API key |
 
 ### 3. Lovable
 Seguir [docs/lovable_prompts.md](docs/lovable_prompts.md): la app se conecta al proyecto de

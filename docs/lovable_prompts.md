@@ -76,6 +76,36 @@ Pantalla principal "Incidencias": lee de la vista incidents_with_attention.
    (sin +, sin espacios); valida ese formato en el formulario.
 ```
 
-## Prompt 3 (opcional): IA de triaje
-Pendiente de decidir si se implementa como workflow de n8n con Gemini o como Edge Function.
-La columna `incidents.ai_suggestion` ya existe para guardar la sugerencia original.
+## Prompt 3: IA de triaje (llama al workflow de n8n)
+
+Reemplazar `<URL_N8N>` por la URL pública del túnel (sin `/` final).
+
+```
+En "Nueva incidencia" agrega, arriba del formulario, un área de texto "Pegar mensaje del
+huésped" y un botón "Sugerir con IA" (deshabilitado si no hay propiedad seleccionada o el texto
+está vacío).
+
+Al hacer clic:
+- Obtén el access token de la sesión actual con supabase.auth.getSession().
+- Haz fetch POST a <URL_N8N>/webhook/h4u-triaje con headers
+  Content-Type: application/json y Authorization: Bearer <access_token>, y body
+  { "text": <mensaje>, "property_id": <propiedad seleccionada> }.
+- Muestra un spinner mientras responde (puede tardar hasta 20 s).
+- Si la respuesta no es 2xx, muestra en un toast el campo "error" del JSON y deja el
+  formulario como estaba.
+
+Respuesta 200: { category, priority, assignee_id, assignee_name, confidence, low_confidence,
+reason, extracted_unit, duplicate_of, guards[], model, generated_at }.
+Muéstrala como tarjeta "Sugerencia de IA":
+- categoría, prioridad (badge), responsable sugerido (o "Sin sugerencia"), unidad detectada;
+- el motivo (reason) y la confianza en porcentaje; si low_confidence es true, badge ámbar
+  "Baja confianza: revisa con cuidado";
+- si guards no está vacío, lista cada elemento con ícono de escudo bajo "Reglas aplicadas";
+- si duplicate_of tiene valor, aviso "Posible duplicado de <folio>" con enlace a esa incidencia.
+Botones "Aplicar" (llena categoría, prioridad, unidad y responsable en el formulario, que sigue
+editable; el mensaje pegado se copia a descripción si está vacía) y "Descartar".
+
+Nada se guarda ni se asigna sin que el operador dé clic en Guardar. Al guardar, si se usó la
+sugerencia, guarda el JSON completo de la respuesta en incidents.ai_suggestion junto con
+"applied": true/false, para comparar después lo que sugirió la IA con lo que eligió el operador.
+```

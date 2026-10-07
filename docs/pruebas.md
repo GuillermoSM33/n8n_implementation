@@ -22,7 +22,22 @@ mínimos.
 - [x] Responsable sin teléfono → `skipped` con el motivo
 - [x] Asignada y sin confirmar > 30 min → el barrido encola y envía la alerta al operador
 
+**Triaje con IA (n8n + mock de Gemini)**
+- [x] Respuesta normal → sugerencia con responsable del catálogo y duplicado detectado (INC abierta de la misma propiedad)
+- [x] "Huele a gas" con prioridad media del modelo → la guarda la sube a alta y lo reporta en `guards`
+- [x] Prompt injection / responsable inventado / folio inexistente → responsable null, duplicado null, baja confianza
+- [x] Respuesta no JSON → 502; Gemini caído (tras reintento) → 502
+- [x] Token inválido o ausente → 401 sin llamar a Gemini; sin propiedad → 400; propiedad inexistente → 404
+- [x] CORS: preflight 204 con `Access-Control-Allow-Origin` para el dominio de Lovable
+
+**Scripts**
+- [x] `correr_migraciones.sh`: aplica desde cero; segunda corrida no hace nada; migración nueva se aplica sola;
+  migración aplicada y editada → se detiene sin aplicar nada; migración que falla a la mitad no deja rastro;
+  `--seed` con datos existentes se omite
+- [x] `n8n-bootstrap.sh`: crea credenciales de relleno, importa y publica 4 workflows; segunda corrida no pisa credenciales
+
 ## Pendiente contra Supabase y Meta reales
 - [ ] `pg_net` llega al webhook a través del túnel (ver `select * from net._http_response order by id desc limit 5;`)
 - [ ] Un WhatsApp real llega al teléfono verificado
+- [ ] Gemini real con `GEMINI_MODEL=gemini-2.5-flash` (confirmar que el modelo está disponible para la API key)
 - [ ] Lovable: login, lista, alta con aviso de duplicado, detalle, errores de la base de datos en un toast

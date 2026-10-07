@@ -51,6 +51,10 @@ services:
       # credenciales de n8n, cifradas con N8N_ENCRYPTION_KEY.
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       H4U_SUPABASE_URL: ${H4U_SUPABASE_URL:?Define H4U_SUPABASE_URL en .env}
+      # Llave pública (anon / publishable), la misma que usa el frontend. No es secreta.
+      H4U_SUPABASE_ANON_KEY: ${H4U_SUPABASE_ANON_KEY:-}
+      GEMINI_API_BASE: ${GEMINI_API_BASE:-https://generativelanguage.googleapis.com/v1beta}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       H4U_OPERATOR_PHONE: ${H4U_OPERATOR_PHONE:-}
       H4U_UNASSIGNED_MINUTES: ${H4U_UNASSIGNED_MINUTES:-30}
       H4U_UNACKNOWLEDGED_MINUTES: ${H4U_UNACKNOWLEDGED_MINUTES:-30}

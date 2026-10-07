@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 SERVICE=n8n
 n8n_exec() { docker compose exec -T "$SERVICE" "$@"; }
 
-supabase_url="$(grep -E '^H4U_SUPABASE_URL=' .env | cut -d= -f2-)"
+supabase_url="${H4U_SUPABASE_URL:-$(grep -sE '^H4U_SUPABASE_URL=' .env | cut -d= -f2- || true)}"
 
 ensure_credential() {
   local id="$1" name="$2" type="$3" data="$4"
@@ -31,15 +31,17 @@ ensure_credential H4uWebhookSecr01 "H4U · Secreto del webhook" httpHeaderAuth \
   '{"name":"X-H4U-Secret","value":"REEMPLAZAR"}'
 ensure_credential H4uWhatsAppTok01 "H4U · Token WhatsApp Cloud API" httpHeaderAuth \
   '{"name":"Authorization","value":"Bearer REEMPLAZAR"}'
+ensure_credential H4uGeminiKey0001 "H4U · API key de Gemini" httpHeaderAuth \
+  '{"name":"x-goog-api-key","value":"REEMPLAZAR"}'
 
 echo "+ Importando workflows"
 n8n_exec n8n import:workflow --separate --input=/workflows >/dev/null
 
-for id in H4uProcesarAviso H4uWebhookAviso0 H4uBarridoAvisos; do
+for id in H4uProcesarAviso H4uWebhookAviso0 H4uBarridoAvisos H4uTriajeIA00001; do
   n8n_exec n8n publish:workflow --id="$id" >/dev/null
   echo "· Publicado: $id"
 done
 
 echo "+ Reiniciando n8n para activar los workflows"
 docker compose restart "$SERVICE" >/dev/null
-echo "Listo. Abre http://localhost:5678 y reemplaza los valores REEMPLAZAR de las 3 credenciales."
+echo "Listo. Abre http://localhost:5678 y reemplaza los valores REEMPLAZAR de las 4 credenciales."
