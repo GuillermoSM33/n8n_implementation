@@ -177,9 +177,7 @@
         0
       ],
       "onError": "continueErrorOutput",
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 1500,
+      "retryOnFail": false,
       "parameters": {
         "method": "POST",
         "url": "={{ $json.url }}",
@@ -189,7 +187,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.request) }}",
         "options": {
-          "timeout": 20000
+          "timeout": 15000
         }
       },
       "credentials": {
@@ -205,12 +203,12 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1400,
-        200
+        1600,
+        250
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ error: 'La IA no está disponible; captura los datos a mano' }) }}",
+        "responseBody": "={{ JSON.stringify({ error: [429, 503].includes($json.error?.status) ? 'Gemini está saturado en este momento; intenta de nuevo en un minuto o captura los datos a mano' : 'La IA no está disponible; captura los datos a mano' }) }}",
         "options": {
           "responseCode": "={{ 502 }}"
         }
@@ -226,7 +224,7 @@
         -100
       ],
       "parameters": {
-        "jsCode": "// Guardas DESPUÉS del modelo: la IA sugiere, estas reglas no se negocian.\nconst input = $('Validar entrada').first().json;\nconst ctx = $('Contexto como el operador').first().json;\nconst raw = $input.first().json;\nconst model = $env.GEMINI_MODEL;\n\nlet s;\ntry {\n  s = JSON.parse(raw.candidates?.[0]?.content?.parts?.[0]?.text ?? '');\n} catch (e) {\n  return [{ json: { ok: false, error: { status: 502, message: 'La IA devolvió una respuesta no válida; captura los datos a mano' } } }];\n}\n\nconst CATS = ['agua', 'electricidad', 'gas', 'climatizacion', 'cerraduras', 'electrodomesticos', 'limpieza', 'otro'];\nconst PRIOS = ['alta', 'media', 'baja'];\nconst guards = [];\n\nconst category = CATS.includes(s.category) ? s.category : 'otro';\nlet priority = PRIOS.includes(s.priority) ? s.priority : 'media';\n\n// 1. Solo responsables activos del catálogo.\nconst validIds = new Set(ctx.assignees.map(a => a.id));\nlet assignee_id = s.assignee_id ?? null;\nif (assignee_id && !validIds.has(assignee_id)) {\n  guards.push('El modelo sugirió un responsable fuera del catálogo; se descartó');\n  assignee_id = null;\n}\n\n// 2. Palabras de riesgo fuerzan prioridad alta, diga lo que diga el modelo.\nconst risk = /\\b(gas|fuego|incendio|humo|inundaci[oó]n|inund|corto ?circuito|corto|chispa|chispas|fuga)\\b/i;\nif (risk.test(input.text) && priority !== 'alta') {\n  guards.push(`Palabra de riesgo detectada: prioridad ${priority} → alta`);\n  priority = 'alta';\n}\n\n// 3. Duplicado solo si el folio existe entre las abiertas de esa propiedad.\nconst openFolios = new Set(ctx.open_incidents.map(i => i.folio));\nconst duplicate_of = s.duplicate_of && openFolios.has(s.duplicate_of) ? s.duplicate_of : null;\n\n// 4. Confianza acotada y bandera de baja confianza.\nconst confidence = Math.max(0, Math.min(1, Number(s.confidence) || 0));\nconst low_confidence = confidence < 0.6;\n\nconst assignee = ctx.assignees.find(a => a.id === assignee_id) ?? null;\n\nreturn [{ json: { ok: true, suggestion: {\n  category, priority, assignee_id,\n  assignee_name: assignee?.name ?? null,\n  confidence, low_confidence,\n  reason: String(s.reason ?? '').slice(0, 300),\n  extracted_unit: s.extracted_unit ? String(s.extracted_unit).slice(0, 60) : null,\n  duplicate_of,\n  guards,\n  model,\n  generated_at: new Date().toISOString(),\n} } }];\n"
+        "jsCode": "// Guardas DESPUÉS del modelo: la IA sugiere, estas reglas no se negocian.\nconst input = $('Validar entrada').first().json;\nconst ctx = $('Contexto como el operador').first().json;\nconst raw = $input.first().json;\n// Puede venir del modelo principal o del de respaldo.\nconst model = $input.first().json.modelVersion ?? $env.GEMINI_MODEL;\n\nlet s;\ntry {\n  s = JSON.parse(raw.candidates?.[0]?.content?.parts?.[0]?.text ?? '');\n} catch (e) {\n  return [{ json: { ok: false, error: { status: 502, message: 'La IA devolvió una respuesta no válida; captura los datos a mano' } } }];\n}\n\nconst CATS = ['agua', 'electricidad', 'gas', 'climatizacion', 'cerraduras', 'electrodomesticos', 'limpieza', 'otro'];\nconst PRIOS = ['alta', 'media', 'baja'];\nconst guards = [];\n\nconst category = CATS.includes(s.category) ? s.category : 'otro';\nlet priority = PRIOS.includes(s.priority) ? s.priority : 'media';\n\n// 1. Solo responsables activos del catálogo.\nconst validIds = new Set(ctx.assignees.map(a => a.id));\nlet assignee_id = s.assignee_id ?? null;\nif (assignee_id && !validIds.has(assignee_id)) {\n  guards.push('El modelo sugirió un responsable fuera del catálogo; se descartó');\n  assignee_id = null;\n}\n\n// 2. Palabras de riesgo fuerzan prioridad alta, diga lo que diga el modelo.\nconst risk = /\\b(gas|fuego|incendio|humo|inundaci[oó]n|inund|corto ?circuito|corto|chispa|chispas|fuga)\\b/i;\nif (risk.test(input.text) && priority !== 'alta') {\n  guards.push(`Palabra de riesgo detectada: prioridad ${priority} → alta`);\n  priority = 'alta';\n}\n\n// 3. Duplicado solo si el folio existe entre las abiertas de esa propiedad.\nconst openFolios = new Set(ctx.open_incidents.map(i => i.folio));\nconst duplicate_of = s.duplicate_of && openFolios.has(s.duplicate_of) ? s.duplicate_of : null;\n\n// 4. Confianza acotada y bandera de baja confianza.\nconst confidence = Math.max(0, Math.min(1, Number(s.confidence) || 0));\nconst low_confidence = confidence < 0.6;\n\nconst assignee = ctx.assignees.find(a => a.id === assignee_id) ?? null;\n\nreturn [{ json: { ok: true, suggestion: {\n  category, priority, assignee_id,\n  assignee_name: assignee?.name ?? null,\n  confidence, low_confidence,\n  reason: String(s.reason ?? '').slice(0, 300),\n  extracted_unit: s.extracted_unit ? String(s.extracted_unit).slice(0, 60) : null,\n  duplicate_of,\n  guards,\n  model,\n  generated_at: new Date().toISOString(),\n} } }];\n"
       }
     },
     {
@@ -294,6 +292,36 @@
         "responseBody": "={{ JSON.stringify({ error: $json.error.message }) }}",
         "options": {
           "responseCode": "={{ $json.error.status }}"
+        }
+      }
+    },
+    {
+      "id": "t-gemini-fb",
+      "name": "Gemini (respaldo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        100
+      ],
+      "onError": "continueErrorOutput",
+      "retryOnFail": false,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GEMINI_API_BASE }}/models/{{ $env.GEMINI_FALLBACK_MODEL }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "H4uGeminiKey0001",
+          "name": "H4U · API key de Gemini"
         }
       }
     }
@@ -397,7 +425,7 @@
         ],
         [
           {
-            "node": "502 IA no disponible",
+            "node": "Gemini (respaldo)",
             "type": "main",
             "index": 0
           }
@@ -427,6 +455,24 @@
         [
           {
             "node": "Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (respaldo)": {
+      "main": [
+        [
+          {
+            "node": "Aplicar guardas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "502 IA no disponible",
             "type": "main",
             "index": 0
           }
