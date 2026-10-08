@@ -32,6 +32,7 @@ esac
 SUPABASE_DB_URL="${SUPABASE_DB_URL:-$(grep -E '^SUPABASE_DB_URL=' .env | cut -d= -f2- || true)}"
 [[ -n "$SUPABASE_DB_URL" ]] || { echo "Falta SUPABASE_DB_URL en .env" >&2; exit 1; }
 export SUPABASE_DB_URL
+source scripts/_psql.sh
 
 tunnel_url() {
   # || true: mientras el túnel no publica su URL, grep no encuentra nada (no es error).
@@ -77,8 +78,7 @@ else
 fi
 
 echo "→ Actualizando Vault y app_config en Supabase"
-docker run --rm -i -e SUPABASE_DB_URL -e URL="$url" postgres:17-alpine \
-  sh -c 'exec psql "$SUPABASE_DB_URL" -X -q -At -v ON_ERROR_STOP=1 -v url="$URL"' <<'SQL'
+psql_run -At -v url="$url" <<'SQL'
 begin;
 select vault.update_secret(
   (select id from vault.secrets where name = 'n8n_webhook_url'),

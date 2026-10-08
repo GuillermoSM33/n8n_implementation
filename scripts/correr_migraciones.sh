@@ -24,7 +24,6 @@ cd "$(dirname "$0")/.."
 
 MIGRATIONS_DIR=supabase/migrations
 SEED_FILE=supabase/seed.sql
-PSQL_IMAGE=postgres:17-alpine
 LOCK_KEY=72684801   # constante arbitraria para pg_advisory_xact_lock
 
 mode=apply
@@ -54,12 +53,9 @@ if [[ "$SUPABASE_DB_URL" =~ @db\.[a-z0-9]+\.supabase\.co ]]; then
   exit 1
 fi
 
-# psql desde contenedor: no hace falta instalar el cliente. La URL viaja como
-# variable de entorno (no aparece en la lista de procesos) y el SQL por stdin.
-psql_run() {
-  docker run --rm -i -e SUPABASE_DB_URL "$PSQL_IMAGE" \
-    sh -c 'exec psql "$SUPABASE_DB_URL" -X -q -v ON_ERROR_STOP=1 "$@"' psql "$@"
-}
+# psql local si existe; si no, desde un contenedor. El SQL va por stdin y la cadena de
+# conexión nunca en la línea de comandos (ver scripts/_psql.sh).
+source scripts/_psql.sh
 
 psql_run -c "
   set client_min_messages = warning;

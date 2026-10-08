@@ -48,8 +48,9 @@ def check(name, cond, detail=''):
 
 
 def sql(query):
-    r = subprocess.run(['docker', 'run', '--rm', '-i', '-e', 'SUPABASE_DB_URL', 'postgres:17-alpine', 'sh', '-c',
-                        'psql "$SUPABASE_DB_URL" -X -q -At -v ON_ERROR_STOP=1'],
+    # Mismo camino que los scripts de bash: psql local o contenedor (scripts/_psql.sh).
+    here = os.path.dirname(os.path.abspath(__file__))
+    r = subprocess.run(['bash', '-c', f'source "{here}/_psql.sh" && psql_run -At'],
                        input=query, text=True, capture_output=True)
     if r.returncode:
         raise RuntimeError(r.stderr)

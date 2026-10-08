@@ -35,16 +35,16 @@ export E2E_PASSWORD
 for v in SUPABASE_DB_URL SB_URL SB_KEY N8N_URL; do
   [[ -n "${!v}" ]] || { echo "Falta $v (revisa .env)" >&2; exit 1; }
 done
+source scripts/_psql.sh
 
 export E2E_IDS_FILE; E2E_IDS_FILE="$(mktemp)"
 cleanup() {
   if [[ "$keep" == false && -s "$E2E_IDS_FILE" ]]; then
     echo "→ Limpiando las incidencias de la prueba"
     ids="$(sed "s/.*/'&'/" "$E2E_IDS_FILE" | paste -sd,)"
-    docker run --rm -i -e SUPABASE_DB_URL postgres:17-alpine \
-      sh -c 'exec psql "$SUPABASE_DB_URL" -X -q -At -v ON_ERROR_STOP=1' <<SQL
+    psql_run -At <<SQL
 delete from public.incidents where id in ($ids);
-select setval('public.incident_folio_seq', 1, false) where not exists (select 1 from public.incidents);
+select setval('public.incident_folio_seq', 1, false) where not exists (select 1 from public.incidents) \\g /dev/null
 select '  ✓ quedan ' || count(*) || ' incidencias' from public.incidents;
 SQL
   elif [[ "$keep" == true ]]; then

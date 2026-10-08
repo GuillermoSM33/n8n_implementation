@@ -58,6 +58,7 @@ scripts/n8n-bootstrap.sh    importa y publica workflows; crea credenciales de re
 scripts/actualizar_tunel.sh apunta Supabase (Vault + app_config) a la URL de n8n (túnel o --url fija)
 scripts/empaquetar_n8n.sh   arma el paquete para migrar n8n (con sus credenciales) a la VM
 scripts/prueba_e2e.sh       prueba de punta a punta contra el ambiente real (24 verificaciones)
+scripts/_psql.sh            helper: psql local (postgresql-client) o, si no hay, psql en Docker
 docs/                       WhatsApp, prompts de Lovable, pruebas
 ```
 
