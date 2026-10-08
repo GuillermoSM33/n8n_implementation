@@ -36,8 +36,36 @@ mínimos.
   `--seed` con datos existentes se omite
 - [x] `n8n-bootstrap.sh`: crea credenciales de relleno, importa y publica 4 workflows; segunda corrida no pisa credenciales
 
-## Pendiente contra Supabase y Meta reales
-- [ ] `pg_net` llega al webhook a través del túnel (ver `select * from net._http_response order by id desc limit 5;`)
-- [ ] Un WhatsApp real llega al teléfono verificado
-- [ ] Gemini real con `GEMINI_MODEL=gemini-3.8-flash` (confirmar que el modelo está disponible para la API key)
-- [ ] Lovable: login, lista, alta con aviso de duplicado, detalle, errores de la base de datos en un toast
+## Verificado contra el ambiente real (2026-10-08)
+Supabase (proyecto H4U), n8n 2.43.1 en Docker detrás del túnel de Cloudflare, Gemini y
+WhatsApp Cloud API (número de prueba). Se repite con:
+
+```bash
+./scripts/prueba_e2e.sh          # pide la contraseña de evaluador@h4u.demo; envía 5 WhatsApp reales
+```
+
+Hace las mismas llamadas que la app (REST de Supabase con la sesión del operador y el
+webhook de triaje) y al final borra solo lo que creó. Resultado: **24/24**.
+
+- [x] Sin sesión no se lee nada; la app toma la URL de n8n de `app_config`
+- [x] Triaje con Gemini real: "Huele a gas…" → Gas, Alta, responsable del catálogo; sesión inválida → 401
+- [x] Si el modelo principal responde 503 (saturado), contesta el de respaldo (`GEMINI_FALLBACK_MODEL`)
+- [x] Alta con la sugerencia aplicada (`ai_suggestion.applied = true`) y aviso de posible duplicado
+- [x] Las 3 reglas de la base de datos devuelven su mensaje en español
+- [x] Comentario firmado con el correo de la sesión; firmar como otra persona → rechazado
+- [x] Asignar → En seguimiento → "Responsable confirmó" → Atendido con nota → Descartado con motivo
+- [x] Escalamientos (reloj adelantado 31 min por SQL): fila en rojo y alerta por WhatsApp,
+      tanto "sin responsable" como "el responsable no ha confirmado"
+- [x] 5 WhatsApp aceptados por Meta (3 asignaciones, 2 alertas) y recibidos en el teléfono;
+      el aviso aparece en la línea de tiempo como evento de n8n
+- [x] Si la incidencia se cierra antes de que salga el aviso de asignación, n8n lo omite
+      ("La incidencia ya está atendido"): no se avisa por algo ya resuelto
+- [x] Lovable (probado a mano en la vista previa): login, lista, alta con sugerencia de IA, detalle,
+      asignación con WhatsApp y línea de tiempo. El sitio publicado contiene el mismo código
+      (revisado en sus bundles)
+
+## Limitaciones conocidas
+- "Enviado" significa **aceptado por Meta**, no entregado: no está configurado el webhook de
+  estados de WhatsApp (entregado / leído / fallido).
+- El túnel rápido de Cloudflare es efímero; si cae, `./scripts/actualizar_tunel.sh` lo recupera
+  y propaga la URL nueva (Vault y `app_config`) sin tocar el frontend.
