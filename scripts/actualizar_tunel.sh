@@ -11,14 +11,21 @@
 # Uso:
 #   ./scripts/actualizar_tunel.sh          # reinicia el túnel y propaga la URL nueva
 #   ./scripts/actualizar_tunel.sh --solo-propagar   # no reinicia; propaga la URL actual
+#   ./scripts/actualizar_tunel.sh --url https://n8n.ejemplo.com   # URL fija (n8n en la nube)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 restart=true
+url=""
 case "${1:-}" in
   --solo-propagar) restart=false ;;
+  --url)
+    restart=false
+    url="${2:?Falta la URL después de --url}"
+    url="${url%/}"
+    [[ "$url" == https://* ]] || { echo "La URL debe ser https://" >&2; exit 2; } ;;
   "") ;;
-  -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
   *) echo "Opción desconocida: $1" >&2; exit 2 ;;
 esac
 
@@ -41,7 +48,7 @@ if [[ "$restart" == true ]]; then
     [[ -n "$url" ]] && break
     sleep 2
   done
-else
+elif [[ -z "$url" ]]; then
   url="$(tunnel_url 24h)"
 fi
 [[ -n "$url" ]] || { echo "No encontré la URL del túnel en los logs" >&2; exit 1; }
@@ -49,7 +56,7 @@ echo "  URL: $url"
 
 # El túnel tarda unos segundos en ser alcanzable. Sin el secreto, el webhook responde 403:
 # eso confirma túnel + n8n + workflow publicado.
-echo "→ Esperando a que el túnel responda"
+echo "→ Esperando a que n8n responda en $url"
 code=000
 for _ in $(seq 1 30); do
   code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$url/webhook/h4u-aviso" --max-time 10 || true)"
@@ -60,7 +67,7 @@ if [[ "$code" != 403 ]]; then
   echo "  El webhook respondió $code (esperaba 403). Revisa: docker compose logs tunnel n8n" >&2
   exit 1
 fi
-echo "  ✓ n8n alcanzable por el túnel"
+echo "  ✓ n8n alcanzable (webhook protegido: 403 sin secreto)"
 
 echo "→ Actualizando .env"
 if grep -qE '^N8N_PUBLIC_URL=' .env; then

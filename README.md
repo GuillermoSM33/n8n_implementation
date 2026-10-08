@@ -6,6 +6,9 @@ MVP de gestión de incidencias de mantenimiento para propiedades en Airbnb
 [n8n-io/n8n](https://github.com/n8n-io/n8n)) para avisar por WhatsApp al responsable
 y escalar al operador cuando nadie responde, y para sugerir el triaje con **Gemini**.
 
+**En producción:** app en https://h4u-supa-connect.lovable.app · n8n en una VM de Google Cloud
+con HTTPS (`https://35-197-28-59.sslip.io`, solo webhooks públicos) · ver [deploy/gcp](deploy/gcp/README.md).
+
 ## Arquitectura
 
 ```mermaid
@@ -37,17 +40,24 @@ flowchart LR
 | Operadores con login (RLS para `authenticated`, nada para `anon`) | Los datos de huéspedes no quedan expuestos con la anon key pública | Hay que crear usuarios para el demo |
 | Triaje: n8n valida el token del operador contra Supabase antes de llamar a Gemini | El webhook público no se puede usar sin sesión; ningún secreto en Lovable | Una llamada extra a Supabase por sugerencia |
 | Guardas después del modelo (catálogo, palabras de riesgo, duplicados, confianza) | La IA sugiere, pero no puede asignar fuera del catálogo ni bajar una emergencia | Las palabras de riesgo son una lista fija que hay que mantener |
+| URL de n8n en `app_config` (Supabase), no en el código del front | Cambiar de túnel a la VM, o de VM, no requiere redeploy del front | Una lectura extra a Supabase por sugerencia |
+| n8n en una VM con Caddy (no Cloud Run) | Mismo docker-compose probado en local; el barrido de cada minuto necesita un proceso siempre vivo; HTTPS y URL fija | Hay que mantener la VM (parches, respaldos) |
 
 ## Estructura
 
 ```
 docker-compose.yml          n8n 2.43.1 + Postgres propio + túnel Cloudflare (perfil "tunnel")
+docker-compose.gcp.yml      en la VM: agrega Caddy (HTTPS automático, solo /webhook/* público)
+deploy/gcp/                 Caddyfile, instalar.sh y la guía de despliegue en Google Cloud
 .env.example                configuración no secreta del contenedor
 supabase/migrations/        esquema, reglas, historial, vista "requiere atención", outbox y RPC
 supabase/seed.sql           4 propiedades, 5 responsables, 8 incidencias (no dispara avisos)
 n8n/workflows/              los 4 workflows exportados (fuente de verdad)
 scripts/correr_migraciones.sh  aplica migraciones pendientes una sola vez (+ seed opcional)
 scripts/n8n-bootstrap.sh    importa y publica workflows; crea credenciales de relleno
+scripts/actualizar_tunel.sh apunta Supabase (Vault + app_config) a la URL de n8n (túnel o --url fija)
+scripts/empaquetar_n8n.sh   arma el paquete para migrar n8n (con sus credenciales) a la VM
+scripts/prueba_e2e.sh       prueba de punta a punta contra el ambiente real (24 verificaciones)
 docs/                       WhatsApp, prompts de Lovable, pruebas
 ```
 

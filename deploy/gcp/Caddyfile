@@ -1,0 +1,13 @@
+# HTTPS automático (Let's Encrypt / ZeroSSL) para N8N_HOST.
+# Público: solo los webhooks de producción. Todo lo demás (editor, API de n8n) → 404.
+{$N8N_HOST} {
+	encode zstd gzip
+
+	handle /webhook/* {
+		reverse_proxy n8n:5678
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

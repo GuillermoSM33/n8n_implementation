@@ -1,0 +1,24 @@
+# Despliegue en una VM (GCP): agrega Caddy con HTTPS automático delante de n8n.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d
+#
+# Solo /webhook/* queda público. El editor de n8n sigue en 127.0.0.1:5678 de la VM:
+# se entra con un túnel SSH (ver deploy/gcp/README.md), no desde internet.
+services:
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    depends_on: [n8n]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      N8N_HOST: ${N8N_HOST:?Define N8N_HOST en .env, p. ej. 34-1-2-3.sslip.io}
+    volumes:
+      - ./deploy/gcp/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
