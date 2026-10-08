@@ -71,7 +71,10 @@ docs/                       WhatsApp, prompts de Lovable, pruebas
    select vault.create_secret('https://<tunel>.trycloudflare.com/webhook/h4u-aviso', 'n8n_webhook_url');
    select vault.create_secret('<mismo valor que la credencial "Secreto del webhook">', 'n8n_webhook_secret');
    ```
-   Si la URL del túnel cambia: `select vault.update_secret((select id from vault.secrets where name = 'n8n_webhook_url'), '<nueva url>');`
+   Si la URL del túnel cambia, o Cloudflare lo da de baja ("Tunnel not found"; los túneles
+   de trycloudflare son efímeros): `./scripts/actualizar_tunel.sh`. Reinicia el túnel y propaga
+   la URL nueva a `.env`, a Vault y a `app_config.n8n_url`, de donde el frontend la lee
+   (no hace falta tocar ni redeployar el front).
    Mientras no esté configurado, los avisos igual salen con el barrido de cada minuto.
 
 ### 2. n8n
@@ -87,7 +90,7 @@ En http://localhost:5678 → crear la cuenta de owner → **Credentials** → re
 
 | Credencial | Valor |
 |---|---|
-| H4U · Supabase service_role | Host = URL del proyecto; Service Role Secret = Project Settings → API Keys → pestaña **Legacy API keys** → `service_role` (la JWT `eyJ...`; con la nueva `sb_secret_...` no está probado) |
+| H4U · Supabase service_role | Host = URL del proyecto; Service Role Secret = Project Settings → API Keys → llave secreta `sb_secret_...` (verificado; la legacy `service_role` también sirve). **No** la `sb_publishable_...`: con esa el barrido falla con "Invalid API key" |
 | H4U · Secreto del webhook | `openssl rand -hex 32` (el mismo va a Vault como `n8n_webhook_secret`) |
 | H4U · Token WhatsApp Cloud API | `Bearer <token>` de la app de Meta (ver [docs/whatsapp.md](docs/whatsapp.md)) |
 | H4U · API key de Gemini | Google AI Studio / proyecto `hire-4u` → API key |
